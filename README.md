@@ -61,6 +61,80 @@ public class Calculator
 await MCPServer.StartAsync("CalculatorServer", "1.0.0");
 ```
 
+## Dynamic Tool Registration
+
+MCPSharp also supports dynamic tool registration without requiring attribute-decorated classes. This is useful when you need to:
+
+- Create tools at runtime based on dynamic data
+- Register tools from external sources or configurations
+- Implement tools with dynamic parameters or behavior
+
+### Creating a Server Instance
+
+```csharp
+// Create a server instance with a name and version
+var server = MCPServer.CreateInstance("DynamicServer", "1.0");
+```
+
+### Registering Simple Dynamic Tools
+
+```csharp
+// Register a dynamic tool with handlers
+server.RegisterDynamicTool("Calculator", "Basic calculator functions", 
+    new Dictionary<string, Func<Dictionary<string, object>, string>>
+    {
+        ["Add"] = (args) => {
+            int a = Convert.ToInt32(args["a"]);
+            int b = Convert.ToInt32(args["b"]);
+            return (a + b).ToString();
+        },
+        
+        ["Subtract"] = (args) => {
+            int a = Convert.ToInt32(args["a"]);
+            int b = Convert.ToInt32(args["b"]);
+            return (a - b).ToString();
+        }
+    });
+```
+
+### Registering Tools with Parameter Schemas
+
+For more control over parameter validation and documentation:
+
+```csharp
+// Define parameter schemas
+var parameterSchemas = new Dictionary<string, ParameterSchema>
+{
+    ["text"] = new ParameterSchema { 
+        Type = "string", 
+        Description = "Text to process", 
+        Required = true 
+    }
+};
+
+// Register a tool with schema
+server.RegisterDynamicToolWithSchema(
+    "StringUtils", 
+    "String utility functions",
+    parameterSchemas,
+    new List<string> { "text" },
+    (args) => {
+        string text = args["text"].ToString();
+        return text.ToUpper();
+    });
+```
+
+### Starting the Server
+
+```csharp
+// Start the server to begin listening for requests
+server.Start();
+```
+
+### Complete Example
+
+See the `MCPSharp.DynamicExample` project for a complete example of dynamic tool registration.
+
 ## API Reference
 
 ### Attributes

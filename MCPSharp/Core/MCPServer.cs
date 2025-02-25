@@ -1,4 +1,4 @@
-﻿#pragma warning disable CS1591 // Missing XML comment for publicly visible type or member
+﻿﻿﻿﻿#pragma warning disable CS1591 // Missing XML comment for publicly visible type or member
 using MCPSharp.Core;
 using MCPSharp.Model;
 using MCPSharp.Model.Capabilities;
@@ -7,8 +7,14 @@ using MCPSharp.Model.Parameters;
 using MCPSharp.Model.Results;
 using MCPSharp.Model.Schemas;
 using StreamJsonRpc;
+using System;
+using System.Collections.Generic;
+using System.IO;
 using System.IO.Pipelines;
+using System.Linq;
 using System.Reflection;
+using System.Threading;
+using System.Threading.Tasks;
 
 namespace MCPSharp
 {
@@ -204,6 +210,98 @@ namespace MCPSharp
         /// <summary>
         /// Starts the JSON-RPC listener.
         /// </summary>
-        private void Start() => _rpc.StartListening();
+        public void Start() => _rpc.StartListening();
+
+        /// <summary>
+        /// Creates a new instance of the MCP server with the specified name and version.
+        /// </summary>
+        /// <param name="serverName">The name of the server.</param>
+        /// <param name="version">The version of the server.</param>
+        /// <returns>A new instance of the MCP server.</returns>
+        public static MCPServer CreateInstance(string serverName, string version)
+        {
+            return new MCPServer(new Implementation(serverName, version));
+        }
+
+        /// <summary>
+        /// Wrapper class for dynamic handlers.
+        /// </summary>
+        internal class DynamicHandlerWrapper
+        {
+            private readonly Func<Dictionary<string, object>, string> _handler;
+            
+            public DynamicHandlerWrapper(Func<Dictionary<string, object>, string> handler)
+            {
+                _handler = handler;
+            }
+            
+            public string HandleRequest(Dictionary<string, object> parameters)
+            {
+                return _handler(parameters);
+            }
+        }
+
+        /// <summary>
+        /// Registers a dynamic tool with the specified name, description, and handlers.
+        /// </summary>
+        /// <param name="name">The name of the tool.</param>
+        /// <param name="description">The description of the tool.</param>
+        /// <param name="handlers">Dictionary of function names to handler functions.</param>
+        public void RegisterDynamicTool(string name, string description, Dictionary<string, Func<Dictionary<string, object>, string>> handlers)
+        {
+            foreach (var handler in handlers)
+            {
+                var tool = new Tool
+                {
+                    Name = handler.Key,
+                    Description = description,
+                    InputSchema = new InputSchema
+                    {
+                        Properties = new Dictionary<string, ParameterSchema>(),
+                        Required = new List<string>()
+                    }
+                };
+                
+                // Create a method wrapper 
+                var methodInfo = typeof(DynamicHandlerWrapper).GetMethod("HandleRequest");
+                var wrapper = new DynamicHandlerWrapper(handler.Value);
+                
+                var toolHandler = new ToolHandler<object>(tool, methodInfo, wrapper);
+                tools[tool.Name] = toolHandler;
+            }
+        }
+
+        /// <summary>
+        /// Registers a dynamic tool with the specified name, description, parameter schemas, and handler.
+        /// </summary>
+        /// <param name="name">The name of the tool.</param>
+        /// <param name="description">The description of the tool.</param>
+        /// <param name="parameterSchemas">Dictionary of parameter names to schemas.</param>
+        /// <param name="requiredParameters">List of required parameter names.</param>
+        /// <param name="handler">The handler function.</param>
+        public void RegisterDynamicToolWithSchema(
+            string name, 
+            string description, 
+            Dictionary<string, ParameterSchema> parameterSchemas,
+            List<string> requiredParameters,
+            Func<Dictionary<string, object>, string> handler)
+        {
+            var tool = new Tool
+            {
+                Name = name,
+                Description = description,
+                InputSchema = new InputSchema
+                {
+                    Properties = parameterSchemas,
+                    Required = requiredParameters
+                }
+            };
+            
+            var methodInfo = typeof(DynamicHandlerWrapper).GetMethod("HandleRequest");
+            var wrapper = new DynamicHandlerWrapper(handler);
+            
+            var toolHandler = new ToolHandler<object>(tool, methodInfo, wrapper);
+            tools[tool.Name] = toolHandler;
+        }
     }
 }
